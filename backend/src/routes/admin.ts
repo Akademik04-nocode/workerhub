@@ -1,0 +1,155 @@
+import { FastifyInstance } from "fastify";
+import { db } from "../db/index.js";
+import { users, orders, reviews, responses } from "../db/schema.js";
+import { eq, desc, count } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import type { FastifyRequest, FastifyReply } from "fastify";
+import { recalcRating } from "../utils/rating.js";
+
+interface SetRoleBody {
+  role: "employer" | "worker" | "admin";
+}
+
+// Гард админа: выполняется ПОСЛЕ app.auth, поэтому req.dbUser уже загружен.
+async function adminGuard(req: FastifyRequest, reply: FastifyReply) {
+  if (req.dbUser?.role !== "admin") {
+    return reply.status(403).send({ error: "Доступ только для администратора" });
+  }
+}
+
+export async function adminRoutes(app: FastifyInstance) {
+  // GET /api/admin/users — все пользователи
+  app.get("/api/admin/users", { preHandler: [app.auth, adminGuard] }, async () => {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  });
+
+  // PATCH /api/admin/users/:id/role — назначить роль (в т.ч. сделать админом)
+  app.patch<{ Params: { id: string }; Body: SetRoleBody }>(
+    "/api/admin/users/:id/role",
+    {
+      preHandler: [app.auth, adminGuard],
+      schema: {
+        body: {
+          type: "object",
+          required: ["role"],
+          properties: { role: { type: "string", enum: ["employer", "worker", "admin"] } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const updated = await db
+        .update(users)
+        .set({ role: req.body.role })
+        .where(eq(users.id, req.params.id))
+        .returning();
+      if (!updated[0]) return reply.status(404).send();
+      return updated[0];
+    }
+  );
+
+  // PATCH /api/admin/users/:id/ban — бан/разбан
+  app.patch<{ Params: { id: string }; Body: { banned: boolean } }>(
+    "/api/admin/users/:id/ban",
+    {
+      preHandler: [app.auth, adminGuard],
+      schema: {
+        body: {
+          type: "object",
+          required: ["banned"],
+          properties: { banned: { type: "boolean" } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const updated = await db
+        .update(users)
+        .set({ banned: req.body.banned })
+        .where(eq(users.id, req.params.id))
+        .returning();
+      if (!updated[0]) return reply.status(404).send();
+      return updated[0];
+    }
+  );
+
+  // GET /api/admin/reviews — последние отзывы (для модерации)
+  app.get("/api/admin/reviews", { preHandler: [app.auth, adminGuard] }, async () => {
+    const reviewer = alias(users, "reviewer");
+    const target = alias(users, "target");
+    return db
+      .select({
+        id: reviews.id,
+        rating: reviews.rating,
+        comment: reviews.comment,
+        createdAt: reviews.createdAt,
+        reviewerName: reviewer.name,
+        targetId: target.id,
+        targetName: target.name,
+      })
+      .from(reviews)
+      .leftJoin(reviewer, eq(reviews.reviewerId, reviewer.id))
+      .leftJoin(target, eq(reviews.targetId, target.id))
+      .orderBy(desc(reviews.createdAt))
+      .limit(200);
+  });
+
+  // DELETE /api/admin/reviews/:id — удалить отзыв и пересчитать рейтинг адресата
+  app.delete<{ Params: { id: string } }>(
+    "/api/admin/reviews/:id",
+    { preHandler: [app.auth, adminGuard] },
+    async (req, reply) => {
+      const rows = await db
+        .select({ targetId: reviews.targetId })
+        .from(reviews)
+        .where(eq(reviews.id, req.params.id))
+        .limit(1);
+      if (!rows[0]) return reply.status(404).send();
+      await db.delete(reviews).where(eq(reviews.id, req.params.id));
+      await recalcRating(db, rows[0].targetId);
+      return { success: true };
+    }
+  );
+
+  // GET /api/admin/orders — все заказы
+  app.get("/api/admin/orders", { preHandler: [app.auth, adminGuard] }, async () => {
+    return db.select().from(orders).orderBy(desc(orders.createdAt)).limit(200);
+  });
+
+  // POST /api/admin/orders/:id/cancel — принудительная отмена любого заказа
+  app.post<{ Params: { id: string } }>(
+    "/api/admin/orders/:id/cancel",
+    { preHandler: [app.auth, adminGuard] },
+    async (req, reply) => {
+      const updated = await db
+        .update(orders)
+        .set({ status: "cancelled" })
+        .where(eq(orders.id, req.params.id))
+        .returning();
+      if (!updated[0]) return reply.status(404).send();
+      return { success: true };
+    }
+  );
+
+  // GET /api/admin/stats — сводка
+  app.get("/api/admin/stats", { preHandler: [app.auth, adminGuard] }, async () => {
+    const [u] = await db.select({ c: count() }).from(users);
+    const [o] = await db.select({ c: count() }).from(orders);
+    const [openOrders] = await db
+      .select({ c: count() })
+      .from(orders)
+      .where(eq(orders.status, "open"));
+    const [r] = await db.select({ c: count() }).from(reviews);
+    const [resp] = await db.select({ c: count() }).from(responses);
+    const [banned] = await db
+      .select({ c: count() })
+      .from(users)
+      .where(eq(users.banned, true));
+    return {
+      users: Number(u?.c ?? 0),
+      banned: Number(banned?.c ?? 0),
+      orders: Number(o?.c ?? 0),
+      openOrders: Number(openOrders?.c ?? 0),
+      reviews: Number(r?.c ?? 0),
+      responses: Number(resp?.c ?? 0),
+    };
+  });
+}
