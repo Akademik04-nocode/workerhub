@@ -1,0 +1,88 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-workerhub}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Порт наружу не пробрасываем: к БД обращается только backend по внутренней
+    # сети compose. Для локальной отладки раскомментируйте строку ниже —
+    # привязка к 127.0.0.1 не открывает порт в интернет.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Redis без пароля не должен быть доступен снаружи ни при каких условиях.
+    # Для отладки: раскомментируйте привязку к localhost.
+    # ports:
+    #   - "127.0.0.1:6379:6379"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-workerhub}
+      REDIS_URL: redis://redis:6379
+      BOT_TOKEN: ${BOT_TOKEN:?Задайте BOT_TOKEN в .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
+      INIT_DATA_TTL: ${INIT_DATA_TTL:-86400}
+      # Таймзона важна для планировщика: даты смен сравниваются в местном времени.
+      TZ: ${TZ:-Europe/Moscow}
+      PORT: 3000
+    # Порт наружу не публикуем: запросы идут через Caddy по HTTPS.
+
+  bot:
+    build: ./bot
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:?}
+      WEBAPP_URL: ${WEBAPP_URL:?Задайте WEBAPP_URL в .env}
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Порт наружу не публикуем: статику отдаёт Caddy.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    environment:
+      DOMAIN: ${DOMAIN:?Задайте DOMAIN в .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
