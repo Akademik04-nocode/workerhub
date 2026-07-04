@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useTelegram } from "../hooks/useTelegram.js";
 import { IconClock, IconPin, IconUsers, IconStar } from "../components/Icons.js";
-import { CATEGORY_LABELS, type Order, type OrdersPage, type OrderCategory } from "../types.js";
+import { CATEGORY_LABELS, type Order, type OrdersPage } from "../types.js";
 
 type OrderWithEmployer = Order & { employer?: { name: string | null; rating: string } };
 
@@ -30,27 +30,19 @@ export function Feed() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<"all" | "today">("all");
-  const [category, setCategory] = useState<OrderCategory | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!initData) return;
-    const catParam = category === "all" ? "" : `&category=${category}`;
-    apiFetch<OrdersPage<OrderWithEmployer>>(`/api/orders?page=${page}&limit=${PAGE_LIMIT}${catParam}`, {}, initData)
+    apiFetch<OrdersPage<OrderWithEmployer>>(`/api/orders?page=${page}&limit=${PAGE_LIMIT}`, {}, initData)
       .then((data) => {
         setOrders((prev) => (page === 1 ? data.items : [...prev, ...data.items]));
         setTotal(data.total);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [initData, page, category]);
-
-  const pickCategory = (c: OrderCategory | "all") => {
-    setCategory(c);
-    setPage(1);
-    setLoading(true);
-  };
+  }, [initData, page]);
 
   const shown = useMemo(() => {
     if (filter === "today")
@@ -79,29 +71,9 @@ export function Feed() {
     <div className="container">
       <h2 className="h-title">Лента</h2>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         {chip("all", "Все")}
         {chip("today", "Сегодня")}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {(["all", "loading", "unloading", "installation"] as const).map((c) => (
-          <span
-            key={c}
-            onClick={() => pickCategory(c)}
-            style={{
-              fontSize: 13,
-              fontWeight: category === c ? 600 : 500,
-              color: category === c ? "#fff" : "var(--fg-2)",
-              background: category === c ? "var(--accent)" : "var(--surface)",
-              padding: "7px 14px",
-              borderRadius: 999,
-              cursor: "pointer",
-            }}
-          >
-            {c === "all" ? "Все виды" : CATEGORY_LABELS[c]}
-          </span>
-        ))}
       </div>
 
       {loading && <p style={{ color: "var(--muted)" }}>Загрузка…</p>}
