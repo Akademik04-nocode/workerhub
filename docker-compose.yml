@@ -52,9 +52,14 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+      - redis
     environment:
       BOT_TOKEN: ${BOT_TOKEN:?}
       WEBAPP_URL: ${WEBAPP_URL:?Задайте WEBAPP_URL в .env}
+      # Для команды /obnovit: бот ставит флаг обновления в Redis, а сервер
+      # (deploy-watcher.sh по крону) подхватывает его и обновляет приложение.
+      REDIS_URL: redis://redis:6379
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
 
   frontend:
     build:

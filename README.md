@@ -19,6 +19,23 @@ sudo bash install.sh
 (Caddy, продлевается автоматически). Останется привязать кнопку в @BotFather:
 Bot Settings → Menu Button → адрес `https://ваш-домен`.
 
+## Обновление командой /obnovit (без консоли)
+
+Чтобы обновлять приложение прямо из Telegram, один раз включите фоновый
+обновлятор на сервере (после того, как код с командой уже развёрнут):
+
+```bash
+chmod +x /opt/worker-hub/deploy-watcher.sh
+( crontab -l 2>/dev/null | grep -v deploy-watcher; \
+  echo "* * * * * /usr/bin/flock -n /tmp/wh-deploy.lock /opt/worker-hub/deploy-watcher.sh" ) | crontab -
+```
+
+После этого администратор (Telegram ID из `ADMIN_TELEGRAM_IDS`) отправляет боту
+`/obnovit` — бот ставит флаг в Redis, `deploy-watcher.sh` по крону (раз в минуту)
+видит его, выполняет `git pull` и пересборку `backend/frontend/bot`, а затем
+присылает в Telegram «✅ Обновление завершено». Бот не имеет прямого доступа к
+Docker или файлам сервера — только ставит флаг. Лог обновлений: `deploy.log`.
+
 ## Быстрый старт вручную
 
 ```bash

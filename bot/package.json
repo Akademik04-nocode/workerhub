@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
