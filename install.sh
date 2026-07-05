@@ -172,14 +172,15 @@ docker compose up -d --build
 docker image prune -f >/dev/null 2>&1 || true
 docker builder prune -f --keep-storage 1GB >/dev/null 2>&1 || true
 
-# Ежедневный бэкап базы с отправкой в Telegram (03:40).
+# Ежедневный бэкап базы в Telegram (03:40) и еженедельная очистка диска (вс 04:30).
+# Читаем текущее расписание устойчиво: на пустом crontab команды «падают» — глушим.
 chmod +x backup.sh 2>/dev/null || true
-BACKUP_CRON="40 3 * * * cd $(pwd) && bash backup.sh > /dev/null 2>&1"
-( crontab -l 2>/dev/null | grep -v 'backup.sh' ; echo "$BACKUP_CRON" ) | crontab -
-
-# Еженедельная автоочистка старых образов (воскресенье, 04:30).
-CRON_LINE='30 4 * * 0 docker image prune -f > /dev/null 2>&1 && docker builder prune -f --keep-storage 1GB > /dev/null 2>&1'
-( crontab -l 2>/dev/null | grep -v 'docker image prune' ; echo "$CRON_LINE" ) | crontab -
+CRON_TMP="$(mktemp)"
+{ crontab -l 2>/dev/null || true; } | grep -v -e 'backup.sh' -e 'docker image prune' > "$CRON_TMP" || true
+echo "40 3 * * * cd $(pwd) && bash backup.sh > /dev/null 2>&1" >> "$CRON_TMP"
+echo "30 4 * * 0 docker image prune -f > /dev/null 2>&1 && docker builder prune -f --keep-storage 1GB > /dev/null 2>&1" >> "$CRON_TMP"
+crontab "$CRON_TMP"
+rm -f "$CRON_TMP"
 
 # ---------- проверка здоровья ----------
 say "Жду, пока приложение поднимется и получит HTTPS-сертификат…"
