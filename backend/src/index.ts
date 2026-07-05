@@ -13,6 +13,7 @@ import { blacklistRoutes } from "./routes/blacklist.js";
 import { adminRoutes } from "./routes/admin.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { startScheduler } from "./jobs/scheduler.js";
+import { startNotifyWorker } from "./utils/notify.js";
 
 const app = Fastify({ logger: true });
 
@@ -67,6 +68,9 @@ async function main() {
   // Фоновые задачи: отложенная рассылка «сначала избранным», автозакрытие
   // просроченных заказов, напоминания о завершении и подтверждении выхода.
   startScheduler();
+
+  // Воркер рассылки уведомлений: читает очередь из Redis (переживает рестарт).
+  startNotifyWorker();
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: "0.0.0.0" });

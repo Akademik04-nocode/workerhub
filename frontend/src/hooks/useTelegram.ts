@@ -34,6 +34,27 @@ export function showAlert(message: string) {
   alert(message);
 }
 
+/**
+ * Открыть ссылку Telegram (профиль @username или t.me/…) правильным способом:
+ * внутри мини-приложения обычный <a> может не сработать, нужен вызов SDK.
+ * Принимает и «username», и «@username», и готовый URL.
+ */
+export function openTelegramLink(usernameOrUrl: string) {
+  const url = usernameOrUrl.startsWith("http")
+    ? usernameOrUrl
+    : `https://t.me/${usernameOrUrl.replace(/^@/, "")}`;
+  const tg = getWebApp();
+  if (tg?.openTelegramLink) {
+    try {
+      tg.openTelegramLink(url);
+      return;
+    } catch {
+      /* старый клиент — фолбэк ниже */
+    }
+  }
+  window.open(url, "_blank");
+}
+
 /** Подтверждение: нативный confirm Telegram с фолбэком на window.confirm. */
 export function showConfirm(message: string): Promise<boolean> {
   const tg = getWebApp();
