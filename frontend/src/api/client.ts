@@ -18,6 +18,11 @@ export async function apiFetch<T = unknown>(
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const errorData = await res.json().catch(() => null);
+    // 401 = сессия Telegram устарела (приложение долго висело открытым).
+    // Говорим человеку, что делать, вместо технического «Invalid initData».
+    if (res.status === 401) {
+      throw new Error("Сессия устарела. Закройте мини-приложение и откройте его заново.");
+    }
     throw new Error(errorData?.error || "Произошла ошибка при запросе к серверу");
   }
   // 204 / пустой ответ

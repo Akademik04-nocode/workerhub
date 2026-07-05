@@ -4,3 +4,4 @@ dist/
 *.log
 .DS_Store
 # drizzle/ и drizzle/meta/ коммитятся: это исходник миграций
+backups/

@@ -46,7 +46,10 @@ function validateInitData(initData: string): ValidationResult {
   const authDate = Number(authDateRaw);
   if (!Number.isFinite(authDate)) return { valid: false, reason: "bad auth_date" };
   const ageSeconds = Math.floor(Date.now() / 1000) - authDate;
-  if (ageSeconds < 0 || ageSeconds > MAX_AUTH_AGE_SECONDS) {
+  // Допускаем перекос часов до 5 минут: свежая подпись может выглядеть
+  // «из будущего», если часы сервера чуть отстают (реальный случай на VPS).
+  const CLOCK_SKEW_TOLERANCE_SECONDS = 300;
+  if (ageSeconds < -CLOCK_SKEW_TOLERANCE_SECONDS || ageSeconds > MAX_AUTH_AGE_SECONDS) {
     return { valid: false, reason: "initData expired" };
   }
 

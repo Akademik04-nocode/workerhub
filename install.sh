@@ -172,6 +172,11 @@ docker compose up -d --build
 docker image prune -f >/dev/null 2>&1 || true
 docker builder prune -f --keep-storage 1GB >/dev/null 2>&1 || true
 
+# Ежедневный бэкап базы с отправкой в Telegram (03:40).
+chmod +x backup.sh 2>/dev/null || true
+BACKUP_CRON="40 3 * * * cd $(pwd) && bash backup.sh > /dev/null 2>&1"
+( crontab -l 2>/dev/null | grep -v 'backup.sh' ; echo "$BACKUP_CRON" ) | crontab -
+
 # Еженедельная автоочистка старых образов (воскресенье, 04:30).
 CRON_LINE='30 4 * * 0 docker image prune -f > /dev/null 2>&1 && docker builder prune -f --keep-storage 1GB > /dev/null 2>&1'
 ( crontab -l 2>/dev/null | grep -v 'docker image prune' ; echo "$CRON_LINE" ) | crontab -
