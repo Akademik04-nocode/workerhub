@@ -3,7 +3,6 @@ import { db, redis } from "../db/index.js";
 import { orders, responses, users } from "../db/schema.js";
 import { notifyInBackground } from "../utils/notify.js";
 import { eligibleWorkersForOrder } from "../utils/eligibility.js";
-import { CATEGORY_LABELS } from "../utils/categories.js";
 
 const TICK_MS = 60_000;
 const CONFIRM_WINDOW_MINUTES = 60; // «подтвердите выход» — за час до начала
@@ -60,7 +59,7 @@ async function broadcastDelayedOrders() {
     notifyInBackground(
       eligible.map((w) => ({
         telegramId: w.telegramId,
-        text: `🆕 ${CATEGORY_LABELS[order.category]}: ${order.date} ${order.startTime}, ${order.address ?? "адрес уточняется"}, оплата ${order.basePay}₽`,
+        text: `🆕 ${order.title ?? "Новый заказ"}: ${order.date} ${order.startTime}, ${order.address ?? "адрес уточняется"}, оплата ${order.basePay}₽`,
       }))
     );
   }

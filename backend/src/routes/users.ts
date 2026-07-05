@@ -32,13 +32,15 @@ export async function userRoutes(app: FastifyInstance) {
     const isAdmin = ADMIN_IDS.has(tg.id);
     const existing = req.dbUser;
     const tgUsername = tg.username ?? null;
+    const tgPhoto = tg.photo_url ?? null;
 
     if (existing) {
-      const patch: { role?: "admin"; username?: string | null } = {};
+      const patch: { role?: "admin"; username?: string | null; photoUrl?: string | null } = {};
       // Бутстрап-админ всегда получает роль admin при входе.
       if (isAdmin && existing.role !== "admin") patch.role = "admin";
-      // Держим username в актуальном состоянии (для кнопки «Написать»).
+      // Держим username и аватар в актуальном состоянии.
       if (existing.username !== tgUsername) patch.username = tgUsername;
+      if (existing.photoUrl !== tgPhoto && tgPhoto !== null) patch.photoUrl = tgPhoto;
 
       if (Object.keys(patch).length > 0) {
         const updated = await db
@@ -57,6 +59,7 @@ export async function userRoutes(app: FastifyInstance) {
         telegramId: tg.id,
         role: isAdmin ? "admin" : "worker",
         username: tgUsername,
+        photoUrl: tgPhoto,
         name: [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
       })
       .returning();
@@ -157,6 +160,7 @@ export async function userRoutes(app: FastifyInstance) {
           rating: users.rating,
           ratingCount: users.ratingCount,
           noShowCount: users.noShowCount,
+          photoUrl: users.photoUrl,
           createdAt: users.createdAt,
         })
         .from(users)

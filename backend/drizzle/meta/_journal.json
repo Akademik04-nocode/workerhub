@@ -15,6 +15,13 @@
       "when": 1783018490388,
       "tag": "0001_slippery_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783253290239,
+      "tag": "0002_melted_screwball",
+      "breakpoints": true
     }
   ]
 }

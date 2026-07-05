@@ -46,6 +46,8 @@ export const users = pgTable(
     rating: numeric("rating", { precision: 3, scale: 2 }).notNull().default("0"),
     ratingCount: integer("rating_count").notNull().default(0),
     notifyEnabled: boolean("notify_enabled").notNull().default(true),
+    // Аватар из Telegram (photo_url из initData); обновляется при каждом входе.
+    photoUrl: text("photo_url"),
     // Категории, о которых уведомлять (null = все). Пустой массив = никакие.
     notifyCategories: text("notify_categories").array(),
     // Счётчик неявок: работодатель отметил «не вышел» при снятии с заказа.
@@ -67,6 +69,8 @@ export const orders = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     status: orderStatusEnum("status").notNull().default("open"),
     category: orderCategoryEnum("category").notNull().default("loading"),
+    // Свободное название заказа («Разгрузка фуры, 2 часа»). У старых заказов null.
+    title: text("title"),
     basePay: integer("base_pay").notNull(),
     overtimeRate: integer("overtime_rate").notNull(),
     minHours: integer("min_hours").notNull(),

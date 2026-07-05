@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useTelegram } from "../hooks/useTelegram.js";
 import { IconBack, IconStar } from "../components/Icons.js";
+import { Avatar } from "../components/Avatar.js";
 import type { PublicProfile, UserReview } from "../types.js";
 
 function fmtDate(iso: string): string {
@@ -63,23 +64,7 @@ export function UserProfile() {
       </div>
 
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div
-          style={{
-            width: 54,
-            height: 54,
-            borderRadius: 999,
-            background: "var(--accent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 18,
-            color: "#fff",
-            flexShrink: 0,
-          }}
-        >
-          {name.slice(0, 2).toUpperCase()}
-        </div>
+        <Avatar url={profile.photoUrl} name={profile.name} size={54} accent />
         <div>
           <div style={{ fontWeight: 600, fontSize: 17 }}>{name}</div>
           <span className="rating">

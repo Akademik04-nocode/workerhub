@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useTelegram } from "../hooks/useTelegram.js";
 import { IconClock, IconPin, IconUsers, IconStar } from "../components/Icons.js";
-import { CATEGORY_LABELS, type Order, type OrdersPage } from "../types.js";
+import type { Order, OrdersPage } from "../types.js";
 
 type OrderWithEmployer = Order & { employer?: { name: string | null; rating: string } };
 
@@ -85,16 +85,19 @@ export function Feed() {
       {shown.map((o) => (
         <div key={o.id} className="card" style={{ cursor: "pointer", padding: 0 }} onClick={() => navigate(`/order/${o.id}`)}>
           <div style={{ padding: "15px 16px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ display: "flex", gap: 6 }}>
-                <span className="chip">{CATEGORY_LABELS[o.category]}</span>
-                <span className="chip">
-                  <IconUsers size={13} color="var(--chip-fg)" />
-                  {o.workersNeeded > 1 ? `${o.workersNeeded} человека` : "1 человек"}
-                </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span className="chip">
+                <IconUsers size={13} color="var(--chip-fg)" />
+                {o.workersNeeded > 1 ? `${o.workersNeeded} человека` : "1 человек"}
               </span>
               <span className="chip chip-orange">{dayLabel(o.date)}</span>
             </div>
+
+            {o.title && (
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, lineHeight: 1.3 }}>
+                {o.title}
+              </div>
+            )}
 
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
               <span className="price">{o.basePay.toLocaleString("ru-RU")} ₽</span>

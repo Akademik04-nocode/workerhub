@@ -12,6 +12,7 @@ import { OrderResponses } from "./pages/OrderResponses.js";
 import { AdminPanel } from "./pages/AdminPanel.js";
 import { Settings } from "./pages/Settings.js";
 import { UserProfile } from "./pages/UserProfile.js";
+import { Privacy } from "./pages/Privacy.js";
 import type { Me } from "./types.js";
 
 export default function App() {
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/user/:id" element={<UserProfile />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Navigate to={home} />} />
       </Routes>
       {me && <BottomTabBar role={me.role} />}

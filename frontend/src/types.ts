@@ -17,6 +17,7 @@ export interface Me {
   noShowCount: number;
   notifyEnabled: boolean;
   notifyCategories: OrderCategory[] | null;
+  photoUrl: string | null;
   banned?: boolean;
 }
 
@@ -28,6 +29,7 @@ export interface MyResponse {
 
 export interface Order {
   id: string;
+  title?: string | null;
   category: OrderCategory;
   basePay: number;
   overtimeRate: number;
@@ -43,6 +45,7 @@ export interface Order {
   employerId?: string;
   employerName?: string | null;
   employerRating?: string;
+  employerPhotoUrl?: string | null;
   employerUsername?: string | null;
   acceptedCount?: number;
   myResponse?: MyResponse | null;
@@ -81,5 +84,6 @@ export interface PublicProfile {
   rating: string;
   ratingCount: number;
   noShowCount: number;
+  photoUrl: string | null;
   createdAt: string;
 }

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useTelegram, showAlert } from "../hooks/useTelegram.js";
 import { IconBag, IconUser } from "../components/Icons.js";
@@ -80,7 +80,10 @@ export function RoleSelect() {
       {roleCard("worker", "Исполнитель", "Находите смены рядом и откликайтесь", <IconUser size={22} color="var(--accent)" />)}
 
       <p style={{ textAlign: "center", color: "var(--faint)", fontSize: 12, marginTop: 20 }}>
-        Продолжая, вы принимаете условия сервиса
+        Продолжая, вы принимаете{" "}
+        <Link to="/privacy" style={{ color: "var(--muted)", textDecoration: "underline" }}>
+          политику обработки персональных данных
+        </Link>
       </p>
     </div>
   );

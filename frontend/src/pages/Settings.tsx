@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
+import { useNavigate } from "react-router-dom";
 import { useTelegram } from "../hooks/useTelegram.js";
+import { Avatar } from "../components/Avatar.js";
 import { IconStar } from "../components/Icons.js";
 import type { Me } from "../types.js";
 
 export function Settings() {
+  const navigate = useNavigate();
   const { initData, tg } = useTelegram();
   const [me, setMe] = useState<Me | null>(null);
   const [name, setName] = useState("");
@@ -57,29 +60,12 @@ export function Settings() {
 
   if (!me) return <div className="container">Загрузка…</div>;
 
-  const initials = (me.name ?? "?").slice(0, 2).toUpperCase();
-
   return (
     <div className="container">
       <h2 className="h-title">Настройки</h2>
 
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div
-          style={{
-            width: 54,
-            height: 54,
-            borderRadius: 999,
-            background: "var(--accent)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 18,
-            color: "#fff",
-          }}
-        >
-          {initials}
-        </div>
+        <Avatar url={me.photoUrl} name={me.name} size={54} accent />
         <div>
           <div style={{ fontWeight: 600, fontSize: 17 }}>{me.name ?? "Без имени"}</div>
           <span className="rating">
@@ -128,6 +114,19 @@ export function Settings() {
           <button className="ghost" onClick={openSupport}>
             Написать
           </button>
+        </div>
+        <div
+          onClick={() => navigate("/privacy")}
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid var(--border, rgba(128,128,128,0.15))",
+            fontSize: 13,
+            color: "var(--muted)",
+            cursor: "pointer",
+          }}
+        >
+          Политика конфиденциальности →
         </div>
       </div>
 

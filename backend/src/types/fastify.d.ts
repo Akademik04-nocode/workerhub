@@ -2,6 +2,7 @@ import "fastify";
 import type { User } from "../db/schema.js";
 
 export interface TelegramUser {
+  photo_url?: string;
   id: number;
   first_name?: string;
   last_name?: string;

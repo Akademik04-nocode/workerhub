@@ -4,7 +4,8 @@ import { apiFetch } from "../api/client.js";
 import { useTelegram, showAlert, showConfirm } from "../hooks/useTelegram.js";
 import { IconBack, IconClock, IconPin, IconUsers, IconStar } from "../components/Icons.js";
 import { ReviewModal } from "../components/ReviewModal.js";
-import { CATEGORY_LABELS, type Me, type Order, type ReviewValues } from "../types.js";
+import { Avatar } from "../components/Avatar.js";
+import type { Me, Order, ReviewValues } from "../types.js";
 
 const statusLabel: Record<Order["status"], { text: string; color: string; bg: string }> = {
   open: { text: "Открыт", color: "var(--green)", bg: "var(--green-bg)" },
@@ -155,7 +156,6 @@ export function OrderDetail() {
           <IconBack />
         </span>
         <span style={{ fontSize: 20, fontWeight: 700 }}>Заказ</span>
-        <span className="chip" style={{ marginLeft: 2 }}>{CATEGORY_LABELS[order.category]}</span>
         <span
           style={{
             marginLeft: "auto",
@@ -170,6 +170,12 @@ export function OrderDetail() {
           {st.text}
         </span>
       </div>
+
+      {order.title && (
+        <div style={{ fontSize: 18, fontWeight: 700, margin: "2px 0 12px", lineHeight: 1.3 }}>
+          {order.title}
+        </div>
+      )}
 
       <div className="card">
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
@@ -211,21 +217,7 @@ export function OrderDetail() {
           onClick={() => order.employerId && navigate(`/user/${order.employerId}`)}
           style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
         >
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 999,
-              background: "var(--chip)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 600,
-              color: "var(--chip-fg)",
-            }}
-          >
-            {order.employerName.slice(0, 2).toUpperCase()}
-          </div>
+          <Avatar url={order.employerPhotoUrl} name={order.employerName} />
           <div>
             <div style={{ fontWeight: 600 }}>{order.employerName}</div>
             <span className="rating">

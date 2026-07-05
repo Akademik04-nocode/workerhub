@@ -2,14 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useTelegram, showAlert } from "../hooks/useTelegram.js";
-import { CATEGORY_LABELS, type OrderCategory } from "../types.js";
 
 export function CreateOrder() {
   const { initData } = useTelegram();
   const navigate = useNavigate();
-  const [category, setCategory] = useState<OrderCategory>("loading");
   const [favFirst, setFavFirst] = useState(false);
   const [f, setF] = useState({
+    title: "",
     base: "",
     overtime: "400",
     hours: "4",
@@ -26,6 +25,10 @@ export function CreateOrder() {
     setF({ ...f, [k]: e.target.value });
 
   const submit = async () => {
+    if (f.title.trim().length < 3) {
+      showAlert("Укажите название заказа (что нужно сделать)");
+      return;
+    }
     if (!f.base || !f.date || !f.startTime) {
       showAlert("Заполните оплату, дату и время");
       return;
@@ -37,7 +40,7 @@ export function CreateOrder() {
         {
           method: "POST",
           body: JSON.stringify({
-            category,
+            title: f.title.trim(),
             notifyFavoritesFirst: favFirst,
             paymentString: `${f.base}/${f.overtime || 0}/${f.hours || 1}`,
             workersNeeded: Number(f.workers) || 1,
@@ -67,35 +70,19 @@ export function CreateOrder() {
     </div>
   );
 
-  const categoryChip = (key: OrderCategory) => (
-    <span
-      key={key}
-      onClick={() => setCategory(key)}
-      style={{
-        flex: 1,
-        textAlign: "center",
-        padding: "9px 0",
-        borderRadius: 10,
-        fontSize: 14,
-        fontWeight: category === key ? 600 : 500,
-        cursor: "pointer",
-        background: category === key ? "var(--accent)" : "var(--chip)",
-        color: category === key ? "#fff" : "var(--fg-2)",
-      }}
-    >
-      {CATEGORY_LABELS[key]}
-    </span>
-  );
-
   return (
     <div className="container">
       <h2 className="h-title">Новый заказ</h2>
 
       {section(
-        "ВИД РАБОТ",
-        <div style={{ display: "flex", gap: 8 }}>
-          {(Object.keys(CATEGORY_LABELS) as OrderCategory[]).map(categoryChip)}
-        </div>
+        "НАЗВАНИЕ",
+        <input
+          type="text"
+          placeholder="Например: Разгрузка фуры, стройматериалы"
+          maxLength={80}
+          value={f.title}
+          onChange={set("title")}
+        />
       )}
 
       {section(

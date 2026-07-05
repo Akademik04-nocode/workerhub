@@ -6,7 +6,7 @@ import { parsePaymentString } from "../utils/parser.js";
 import { recalcRating, overallRating } from "../utils/rating.js";
 import { notifyInBackground } from "../utils/notify.js";
 import { eligibleWorkersForOrder } from "../utils/eligibility.js";
-import { ORDER_CATEGORIES, CATEGORY_LABELS, type OrderCategory } from "../utils/categories.js";
+import { ORDER_CATEGORIES, type OrderCategory } from "../utils/categories.js";
 
 const CACHE_KEY = "open_orders_cache";
 const CACHE_TTL_SECONDS = 30;
@@ -50,7 +50,8 @@ async function isBlockedPair(employerId: string, workerId: string): Promise<bool
 
 interface CreateOrderBody {
   paymentString: string;
-  category: OrderCategory;
+  title: string;
+  category?: OrderCategory;
   notifyFavoritesFirst?: boolean;
   date: string;
   startTime: string;
@@ -65,9 +66,10 @@ interface CreateOrderBody {
 const createOrderSchema = {
   body: {
     type: "object",
-    required: ["paymentString", "category", "date", "startTime"],
+    required: ["paymentString", "title", "date", "startTime"],
     properties: {
       paymentString: { type: "string", minLength: 3 },
+      title: { type: "string", minLength: 3, maxLength: 80 },
       category: { type: "string", enum: [...ORDER_CATEGORIES] },
       notifyFavoritesFirst: { type: "boolean" },
       date: { type: "string" },
@@ -111,6 +113,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const employer = req.dbUser;
       const {
         paymentString,
+        title,
         category,
         notifyFavoritesFirst,
         date,
@@ -132,12 +135,15 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const minRatingNum = isFiniteNumber(minRating) ? minRating : 0;
       const favFirst = notifyFavoritesFirst === true;
+      // Категория осталась в БД для совместимости; в интерфейсе теперь свободное название.
+      const orderCategory: OrderCategory = category ?? "loading";
 
       const newOrder = await db
         .insert(orders)
         .values({
           employerId: employer.id,
-          category,
+          title: title.trim(),
+          category: orderCategory,
           // «Сначала избранным»: вторая волна уведомлений уйдёт фоновым джобом.
           notifyFavoritesFirst: favFirst,
           broadcastDone: !favFirst,
@@ -163,14 +169,14 @@ export async function orderRoutes(app: FastifyInstance) {
       const eligible = await eligibleWorkersForOrder(
         employer.id,
         minRatingNum,
-        category,
+        orderCategory,
         favFirst ? { favoritesOnly: true } : {}
       );
       const star = favFirst ? "⭐ " : "";
       notifyInBackground(
         eligible.map((w) => ({
           telegramId: w.telegramId,
-          text: `${star}🆕 ${CATEGORY_LABELS[category]}: ${date} ${startTime}, ${address ?? "адрес уточняется"}, оплата ${parsed.basePay}₽`,
+          text: `${star}🆕 ${title.trim()}: ${date} ${startTime}, ${address ?? "адрес уточняется"}, оплата ${parsed.basePay}₽`,
         }))
       );
 
@@ -220,6 +226,7 @@ export async function orderRoutes(app: FastifyInstance) {
         db
           .select({
             id: orders.id,
+            title: orders.title,
             category: orders.category,
             basePay: orders.basePay,
             overtimeRate: orders.overtimeRate,
@@ -341,10 +348,12 @@ export async function orderRoutes(app: FastifyInstance) {
           latitude: orders.latitude,
           longitude: orders.longitude,
           createdAt: orders.createdAt,
+          title: orders.title,
           category: orders.category,
           employerName: users.name,
           employerRating: users.rating,
           employerUsername: users.username,
+          employerPhotoUrl: users.photoUrl,
         })
         .from(orders)
         .innerJoin(users, eq(orders.employerId, users.id))
@@ -527,6 +536,7 @@ export async function orderRoutes(app: FastifyInstance) {
             rating: users.rating,
             ratingCount: users.ratingCount,
             noShowCount: users.noShowCount,
+            photoUrl: users.photoUrl,
           },
         })
         .from(responses)
@@ -714,6 +724,7 @@ export async function orderRoutes(app: FastifyInstance) {
         basePay: number;
         minRatingRequired: string;
         category: OrderCategory;
+        title: string | null;
       } | null = null;
       try {
         await db.transaction(async (tx) => {
@@ -738,6 +749,7 @@ export async function orderRoutes(app: FastifyInstance) {
             basePay: order.basePay,
             minRatingRequired: order.minRatingRequired,
             category: order.category,
+            title: order.title,
           };
           await tx
             .update(orders)
@@ -758,12 +770,13 @@ export async function orderRoutes(app: FastifyInstance) {
           basePay: number;
           minRatingRequired: string;
           category: OrderCategory;
+          title: string | null;
         };
         const eligible = await eligibleWorkersForOrder(me.id, Number(info.minRatingRequired), info.category);
         notifyInBackground(
           eligible.map((w) => ({
             telegramId: w.telegramId,
-            text: `🔁 Донабор (${CATEGORY_LABELS[info.category]}): ${info.date} ${info.startTime}, оплата ${info.basePay}₽`,
+            text: `🔁 Донабор: ${info.title ?? "заказ"} — ${info.date} ${info.startTime}, оплата ${info.basePay}₽`,
           }))
         );
       }

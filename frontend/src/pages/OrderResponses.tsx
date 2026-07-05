@@ -5,6 +5,7 @@ import { useTelegram, showAlert, showConfirm } from "../hooks/useTelegram.js";
 import { IconBack, IconStar } from "../components/Icons.js";
 import { ReviewModal } from "../components/ReviewModal.js";
 import { RemoveWorkerModal, type RemovePayload } from "../components/RemoveWorkerModal.js";
+import { Avatar } from "../components/Avatar.js";
 import type { Order, ReviewValues } from "../types.js";
 
 interface ResponseRow {
@@ -18,6 +19,7 @@ interface ResponseRow {
     rating: string;
     ratingCount: number;
     noShowCount: number;
+    photoUrl: string | null;
   };
 }
 
@@ -191,24 +193,9 @@ export function OrderResponses() {
         const completed = order?.status === "completed";
         return (
           <div key={r.id} className="card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div
-              onClick={() => navigate(`/user/${r.worker.id}`)}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 999,
-                background: "var(--chip)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 600,
-                color: "var(--chip-fg)",
-                flexShrink: 0,
-                cursor: "pointer",
-              }}
-            >
-              {name.slice(0, 2).toUpperCase()}
-            </div>
+            <span onClick={() => navigate(`/user/${r.worker.id}`)} style={{ cursor: "pointer" }}>
+              <Avatar url={r.worker.photoUrl} name={r.worker.name} />
+            </span>
             <div
               style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
               onClick={() => navigate(`/user/${r.worker.id}`)}
