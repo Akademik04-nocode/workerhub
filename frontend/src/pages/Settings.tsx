@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
 import { useTelegram } from "../hooks/useTelegram.js";
-import { CATEGORY_LABELS, type OrderCategory } from "../types.js";
 import { IconStar } from "../components/Icons.js";
 import type { Me } from "../types.js";
 
@@ -37,16 +36,6 @@ export function Settings() {
     await patch({ name, phone });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
-  };
-
-  const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as OrderCategory[];
-
-  const toggleCategory = async (c: OrderCategory) => {
-    if (!me) return;
-    const current = me.notifyCategories === null ? ALL_CATEGORIES : me.notifyCategories;
-    const next = current.includes(c) ? current.filter((x) => x !== c) : [...current, c];
-    // Все категории выбраны => храним null («все», включая будущие).
-    await patch({ notifyCategories: next.length === ALL_CATEGORIES.length ? null : next });
   };
 
   const openSupport = () => {
@@ -127,50 +116,6 @@ export function Settings() {
           />
         </div>
       </div>
-
-      {me.role !== "employer" && (
-        <div className="card">
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Категории уведомлений</div>
-          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
-            Получать уведомления только о выбранных видах работ
-          </div>
-          {(Object.keys(CATEGORY_LABELS) as OrderCategory[]).map((c) => {
-            const selected = me.notifyCategories === null || me.notifyCategories.includes(c);
-            return (
-              <div
-                key={c}
-                onClick={() => toggleCategory(c)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "9px 0",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontSize: 15 }}>{CATEGORY_LABELS[c]}</span>
-                <span
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 7,
-                    border: selected ? "none" : "2px solid var(--border-2)",
-                    background: selected ? "var(--green)" : "transparent",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 700,
-                  }}
-                >
-                  {selected ? "✓" : ""}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       <div className="card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
