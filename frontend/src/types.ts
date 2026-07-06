@@ -18,6 +18,7 @@ export interface Me {
   notifyEnabled: boolean;
   notifyCategories: OrderCategory[] | null;
   photoUrl: string | null;
+  onboarded?: boolean;
   banned?: boolean;
 }
 

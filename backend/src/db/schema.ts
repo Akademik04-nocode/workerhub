@@ -53,6 +53,8 @@ export const users = pgTable(
     // Счётчик неявок: работодатель отметил «не вышел» при снятии с заказа.
     noShowCount: integer("no_show_count").notNull().default(0),
     banned: boolean("banned").notNull().default(false),
+    // Первичный выбор роли пройден. После этого роль менять нельзя (только админ).
+    onboarded: boolean("onboarded").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

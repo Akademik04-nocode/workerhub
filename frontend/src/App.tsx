@@ -49,10 +49,12 @@ export default function App() {
 
   if (loading) return <div className="container">Загрузка…</div>;
 
-  // Пользователь создаётся как worker по умолчанию. На первом входе (нет отметки
-  // об онбординге) предлагаем явно выбрать роль. Админ онбординг пропускает.
-  const onboarded = typeof localStorage !== "undefined" && localStorage.getItem("wh_onboarded");
-  const needsRole = !!me && me.role !== "admin" && !onboarded;
+  // Пользователь создаётся как worker по умолчанию. На первом входе (роль ещё не
+  // подтверждена) предлагаем явно выбрать её. Источник истины — серверный флаг
+  // onboarded; localStorage лишь мгновенно гасит онбординг сразу после выбора,
+  // до перезагрузки. Уже прошедшего онбординг на новом устройстве не выкинет.
+  const localOnboarded = typeof localStorage !== "undefined" && localStorage.getItem("wh_onboarded");
+  const needsRole = !!me && me.role !== "admin" && !me.onboarded && !localOnboarded;
 
   const home = !me
     ? "/role"

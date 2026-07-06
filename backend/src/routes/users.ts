@@ -58,6 +58,7 @@ export async function userRoutes(app: FastifyInstance) {
       .values({
         telegramId: tg.id,
         role: isAdmin ? "admin" : "worker",
+        onboarded: isAdmin,
         username: tgUsername,
         photoUrl: tgPhoto,
         name: [tg.first_name, tg.last_name].filter(Boolean).join(" ") || null,
@@ -86,9 +87,17 @@ export async function userRoutes(app: FastifyInstance) {
       if (me.role === "admin") {
         return reply.status(400).send({ error: "Роль администратора меняется только через админ-панель" });
       }
+      // Роль выбирается ОДИН РАЗ при онбординге и дальше пользователем не меняется
+      // (только через админ-панель). Часть защиты от накрутки: нельзя свободно
+      // стать работодателем, наплодить фейковых заказов и вернуться обратно.
+      if (me.onboarded) {
+        return reply
+          .status(403)
+          .send({ error: "Роль уже выбрана, изменить её нельзя. По вопросам напишите в поддержку." });
+      }
       const updated = await db
         .update(users)
-        .set({ role: req.body.role })
+        .set({ role: req.body.role, onboarded: true })
         .where(eq(users.id, me.id))
         .returning();
       return updated[0];

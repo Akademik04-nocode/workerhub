@@ -47,17 +47,6 @@ export function Settings() {
     else window.open(url, "_blank");
   };
 
-  const switchRole = async () => {
-    if (!me) return;
-    const role = me.role === "employer" ? "worker" : "employer";
-    const updated = await apiFetch<Me>(
-      "/api/me/role",
-      { method: "PATCH", body: JSON.stringify({ role }) },
-      initData
-    );
-    setMe(updated);
-  };
-
   if (!me) return <div className="container">Загрузка…</div>;
 
   return (
@@ -142,11 +131,6 @@ export function Settings() {
                   : "Исполнитель"}
             </div>
           </div>
-          {me.role !== "admin" && (
-            <button className="ghost" onClick={switchRole}>
-              Сменить
-            </button>
-          )}
         </div>
       </div>
     </div>
