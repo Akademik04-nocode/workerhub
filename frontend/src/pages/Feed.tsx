@@ -23,6 +23,21 @@ function dayLabel(date: string): string {
   return date;
 }
 
+/**
+ * Время создания заказа в московском времени, независимо от часового пояса
+ * устройства пользователя. Пример: «5 июл., 14:30».
+ */
+function createdAtMsk(iso?: string): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function Feed() {
   const { initData } = useTelegram();
   const navigate = useNavigate();
@@ -113,6 +128,11 @@ export function Feed() {
                 <IconPin />
                 {o.address ?? "адрес уточняется"}
               </div>
+              {o.createdAt && (
+                <div style={{ fontSize: 12, color: "var(--faint)" }}>
+                  Создан {createdAtMsk(o.createdAt)} МСК
+                </div>
+              )}
             </div>
           </div>
 

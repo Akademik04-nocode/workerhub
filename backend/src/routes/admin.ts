@@ -161,6 +161,7 @@ export async function adminRoutes(app: FastifyInstance) {
         status: orders.status,
         date: orders.date,
         startTime: orders.startTime,
+        createdAt: orders.createdAt,
       })
       .from(orders)
       .orderBy(desc(orders.createdAt))

@@ -42,6 +42,7 @@ export interface Order {
   status: "open" | "in_progress" | "completed" | "cancelled";
   latitude: number | null;
   longitude: number | null;
+  createdAt?: string;
   employerId?: string;
   employerName?: string | null;
   employerRating?: string;

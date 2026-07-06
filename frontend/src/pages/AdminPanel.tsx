@@ -36,6 +36,7 @@ interface AdminOrder {
   status: string;
   date: string;
   startTime: string;
+  createdAt: string;
 }
 interface DetailResponse {
   id: string;
@@ -69,6 +70,7 @@ interface OrderDetail {
     startTime: string;
     address: string | null;
     description: string | null;
+    createdAt: string;
     employerId: string | null;
     employerName: string | null;
     employerUsername: string | null;
@@ -94,6 +96,17 @@ const ORDER_STATUS: Record<string, string> = {
   completed: "Завершён",
   cancelled: "Отменён",
 };
+
+/** Время создания заказа в московском времени (не зависит от часового пояса устройства). */
+function createdAtMsk(iso: string): string {
+  return new Date(iso).toLocaleString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 const RESP_STATUS: Record<string, { label: string; color: string }> = {
   accepted: { label: "Выбран", color: "var(--accent)" },
   pending: { label: "Откликнулся", color: "var(--muted)" },
@@ -342,6 +355,9 @@ export function AdminPanel() {
                   {o.date} {o.startTime} · {ORDER_STATUS[o.status] ?? o.status} ·{" "}
                   {o.basePay.toLocaleString("ru-RU")} ₽
                 </div>
+                <div style={{ fontSize: 12, color: "var(--faint)", marginTop: 2 }}>
+                  Создан {createdAtMsk(o.createdAt)} МСК
+                </div>
               </div>
               <span style={{ color: "var(--faint)", fontSize: 15 }}>
                 {expandedOrder === o.id ? "▲" : "▼"}
@@ -356,6 +372,9 @@ export function AdminPanel() {
                     <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
                       Нужно исполнителей: {orderDetail.order.workersNeeded}
                       {orderDetail.order.address ? ` · ${orderDetail.order.address}` : ""}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--faint)", marginBottom: 10 }}>
+                      Создан {createdAtMsk(orderDetail.order.createdAt)} МСК
                     </div>
                     {orderDetail.order.description && (
                       <div style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.45 }}>
