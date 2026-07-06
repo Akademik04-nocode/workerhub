@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { users, reviews } from "../db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { users, reviews, orders, responses } from "../db/schema.js";
+import { eq, desc, and, count, sql } from "drizzle-orm";
 import { ORDER_CATEGORIES } from "../utils/categories.js";
 
 // Telegram ID бутстрап-админов задаются ТОЛЬКО через ADMIN_TELEGRAM_IDS.
@@ -167,7 +167,38 @@ export async function userRoutes(app: FastifyInstance) {
         .where(eq(users.id, req.params.id))
         .limit(1);
       if (!rows[0]) return reply.status(404).send();
-      return rows[0];
+
+      // Сигналы доверия (Слой 2): сколько РАЗНЫХ людей оценивали и сколько
+      // завершённых смен за плечами — их трудно накрутить дёшево, в отличие от
+      // самой звезды. Показываем рядом с рейтингом.
+      const [distinct] = await db
+        .select({ c: sql<number>`COUNT(DISTINCT ${reviews.reviewerId})` })
+        .from(reviews)
+        .where(eq(reviews.targetId, req.params.id));
+
+      // Завершённые заказы, где человек участвовал: как работодатель…
+      const [asEmployer] = await db
+        .select({ c: count() })
+        .from(orders)
+        .where(and(eq(orders.employerId, req.params.id), eq(orders.status, "completed")));
+      // …или как принятый исполнитель.
+      const [asWorker] = await db
+        .select({ c: sql<number>`COUNT(DISTINCT ${responses.orderId})` })
+        .from(responses)
+        .innerJoin(orders, eq(responses.orderId, orders.id))
+        .where(
+          and(
+            eq(responses.workerId, req.params.id),
+            eq(responses.status, "accepted"),
+            eq(orders.status, "completed")
+          )
+        );
+
+      return {
+        ...rows[0],
+        distinctReviewers: Number(distinct?.c ?? 0),
+        completedShifts: Number(asEmployer?.c ?? 0) + Number(asWorker?.c ?? 0),
+      };
     }
   );
 

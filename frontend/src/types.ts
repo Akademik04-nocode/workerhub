@@ -85,6 +85,8 @@ export interface PublicProfile {
   rating: string;
   ratingCount: number;
   noShowCount: number;
+  distinctReviewers: number;
+  completedShifts: number;
   photoUrl: string | null;
   createdAt: string;
 }

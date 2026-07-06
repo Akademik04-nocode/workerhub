@@ -72,6 +72,9 @@ export function UserProfile() {
             {Number(profile.rating).toFixed(2)} · {profile.ratingCount}{" "}
             {profile.ratingCount === 1 ? "оценка" : "оценок"}
           </span>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+            Оценили: {profile.distinctReviewers} чел. · Смен выполнено: {profile.completedShifts}
+          </div>
           {profile.noShowCount > 0 && (
             <div style={{ fontSize: 13, color: "var(--danger)", marginTop: 3, fontWeight: 600 }}>
               ⚠ Неявок: {profile.noShowCount}
