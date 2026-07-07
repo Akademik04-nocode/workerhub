@@ -6,6 +6,10 @@ import { Avatar } from "../components/Avatar.js";
 import { IconStar } from "../components/Icons.js";
 import type { Me } from "../types.js";
 
+// Карта для добровольной поддержки автора.
+const DONATION_CARD = "2200701324389292";
+const DONATION_CARD_PRETTY = "2200 7013 2438 9292";
+
 export function Settings() {
   const navigate = useNavigate();
   const { initData, tg } = useTelegram();
@@ -13,6 +17,7 @@ export function Settings() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!initData) return;
@@ -45,6 +50,29 @@ export function Settings() {
     const url = "https://t.me/akademik_04";
     if (tg?.openTelegramLink) tg.openTelegramLink(url);
     else window.open(url, "_blank");
+  };
+
+  // Копирование номера карты для доната. navigator.clipboard работает в большинстве
+  // webview Telegram; на всякий случай — фолбэк через временный textarea.
+  const copyCard = async () => {
+    try {
+      await navigator.clipboard.writeText(DONATION_CARD);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = DONATION_CARD;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* совсем старый клиент — оставим как есть */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   if (!me) return <div className="container">Загрузка…</div>;
@@ -131,6 +159,32 @@ export function Settings() {
                   : "Исполнитель"}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ fontWeight: 600 }}>Поддержка автора</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.45 }}>
+          Если приложение оказалось полезным — можно поддержать разработку. Спасибо! 🙏
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            background: "var(--surface-2, rgba(128,128,128,0.10))",
+            borderRadius: 10,
+            padding: "10px 12px",
+          }}
+        >
+          <span style={{ fontSize: 16, letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>
+            {DONATION_CARD_PRETTY}
+          </span>
+          <button className="ghost" onClick={copyCard} style={{ flexShrink: 0 }}>
+            {copied ? "Скопировано ✓" : "Скопировать"}
+          </button>
         </div>
       </div>
     </div>
