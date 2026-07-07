@@ -473,9 +473,23 @@ export async function orderRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Отклик на этот заказ недоступен" });
       }
 
-      try {
-        await db.insert(responses).values({ orderId: id, workerId: me.id });
-      } catch {
+      // Отклик — upsert по (orderId, workerId): если раньше отклик был "rejected"
+      // (авто-отклонён при заполнении слотов ИЛИ снят работодателем), донабор
+      // должен снова пускать этого исполнителя. Обычный INSERT упёрся бы в
+      // уникальный индекс и вечно блокировал повторный отклик после reopen.
+      // WHERE-условие в DO UPDATE — та же проверка "текущий статус = rejected"
+      // прямо в БД: при status IN (pending, accepted) апдейт не применится
+      // (0 строк), и мы вернём 409, как раньше.
+      const upserted = await db
+        .insert(responses)
+        .values({ orderId: id, workerId: me.id })
+        .onConflictDoUpdate({
+          target: [responses.orderId, responses.workerId],
+          set: { status: "pending", createdAt: new Date(), confirmedAt: null },
+          setWhere: eq(responses.status, "rejected"),
+        })
+        .returning({ id: responses.id });
+      if (upserted.length === 0) {
         return reply.status(409).send({ error: "Вы уже откликнулись на этот заказ" });
       }
 

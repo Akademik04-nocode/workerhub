@@ -229,11 +229,13 @@ export function OrderDetail() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-        {isWorker && order.status === "open" && !order.myResponse && (
-          <button onClick={respond} disabled={busy}>
-            Откликнуться
-          </button>
-        )}
+        {isWorker &&
+          order.status === "open" &&
+          (!order.myResponse || order.myResponse.status === "rejected") && (
+            <button onClick={respond} disabled={busy}>
+              Откликнуться
+            </button>
+          )}
 
         {isWorker && order.myResponse?.status === "pending" && (
           <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 14, padding: "6px 0" }}>

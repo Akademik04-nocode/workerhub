@@ -122,6 +122,9 @@ export const responses = pgTable(
   (t) => ({
     // Один отклик исполнителя на заказ.
     uniqResp: uniqueIndex("responses_order_worker_idx").on(t.orderId, t.workerId),
+    // "Мои отклики/история/дашборд" фильтруют по workerId без orderId —
+    // уникальный индекс тут не помогает (orderId ведущая колонка).
+    workerIdx: index("responses_worker_idx").on(t.workerId),
   })
 );
 
@@ -154,6 +157,11 @@ export const reviews = pgTable(
       t.reviewerId,
       t.targetId
     ),
+    // recalcRating (срабатывает на КАЖДЫЙ отзыв) и профиль пользователя фильтруют
+    // по targetId/reviewerId без orderId — уникальный индекс тут не помогает
+    // (orderId ведущая колонка), без этих индексов был бы full scan таблицы.
+    targetIdx: index("reviews_target_idx").on(t.targetId),
+    reviewerIdx: index("reviews_reviewer_idx").on(t.reviewerId),
   })
 );
 
