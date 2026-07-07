@@ -121,6 +121,32 @@ export function Settings() {
       </div>
 
       <div className="card">
+        <div style={{ fontWeight: 600 }}>Поддержка автора</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.45 }}>
+          Если приложение оказалось полезным — можно поддержать разработку. Спасибо! 🙏
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            background: "var(--surface-2, rgba(128,128,128,0.10))",
+            borderRadius: 10,
+            padding: "10px 12px",
+          }}
+        >
+          <span style={{ fontSize: 16, letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>
+            {DONATION_CARD_PRETTY}
+          </span>
+          <button className="ghost" onClick={copyCard} style={{ flexShrink: 0 }}>
+            {copied ? "Скопировано ✓" : "Скопировать"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontWeight: 600 }}>Поддержка</div>
@@ -159,32 +185,6 @@ export function Settings() {
                   : "Исполнитель"}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div style={{ fontWeight: 600 }}>Поддержка автора</div>
-        <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, lineHeight: 1.45 }}>
-          Если приложение оказалось полезным — можно поддержать разработку. Спасибо! 🙏
-        </div>
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            background: "var(--surface-2, rgba(128,128,128,0.10))",
-            borderRadius: 10,
-            padding: "10px 12px",
-          }}
-        >
-          <span style={{ fontSize: 16, letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>
-            {DONATION_CARD_PRETTY}
-          </span>
-          <button className="ghost" onClick={copyCard} style={{ flexShrink: 0 }}>
-            {copied ? "Скопировано ✓" : "Скопировать"}
-          </button>
         </div>
       </div>
     </div>
