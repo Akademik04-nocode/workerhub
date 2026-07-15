@@ -13,8 +13,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -30,8 +30,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -45,8 +45,8 @@ jobs:
       run:
         working-directory: bot
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -54,12 +54,20 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
+  # SSH-деплой ВЫКЛЮЧЕН по умолчанию: приложение обновляется командой /obnovit
+  # в боте (флаг в Redis → deploy-watcher.sh на сервере). Без секретов
+  # DEPLOY_HOST/USER/KEY этот job падал на каждом пуше и красил весь CI,
+  # хотя сборка и тесты проходили.
+  #
+  # Чтобы включить: задать в репозитории переменную DEPLOY_ENABLED=true
+  # (Settings → Secrets and variables → Actions → Variables) и добавить
+  # секреты DEPLOY_HOST, DEPLOY_USER, DEPLOY_KEY.
   deploy:
     needs: [backend, frontend, bot]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

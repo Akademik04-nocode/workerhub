@@ -15,7 +15,23 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { startScheduler } from "./jobs/scheduler.js";
 import { startNotifyWorker } from "./utils/notify.js";
 
-const app = Fastify({ logger: true });
+/**
+ * trustProxy обязателен: backend стоит за прокси, и без него req.ip равен
+ * адресу Caddy — ОДИНАКОВОМУ для всех пользователей. Лимит по такому "IP"
+ * душил бы всех разом.
+ *
+ * Значение = число доверенных прокси между клиентом и backend.
+ * Прод: клиент → Cloudflare → Caddy → backend, то есть 2.
+ * X-Forwarded-For приходит как "реальныйКлиент, IP_Cloudflare", сокет — Caddy;
+ * при hops=2 Fastify отдаёт именно реального клиента.
+ *
+ * Важно: значение должно совпадать с реальной цепочкой. Если убрать Cloudflare
+ * (серое облако) и не поправить TRUST_PROXY_HOPS на 1, клиент сможет подделать
+ * свой IP через заголовок X-Forwarded-For и обойти лимит.
+ */
+const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS ?? 2);
+
+const app = Fastify({ logger: true, trustProxy: TRUST_PROXY_HOPS });
 
 /**
  * Прогон миграций при старте — отдельным соединением (max: 1),
@@ -51,53 +67,25 @@ function corsOrigins(): string[] | boolean {
   return list.length > 0 ? list : true;
 }
 
-/**
- * Ключ для rate limit.
- *
- * Раньше ключом был весь заголовок Authorization. Проблема: Telegram выдаёт
- * новый initData при каждом открытии мини-аппа, поэтому у одного и того же
- * человека ключ постоянно менялся и лимит фактически обнулялся при перезаходе;
- * а злоумышленник мог просто слать мусорный заголовок, получая новый лимит на
- * каждый запрос. Плюс в ключ попадала подпись целиком (лишние данные в памяти).
- *
- * Теперь: для авторизованных — стабильный Telegram ID (не меняется от сессии
- * к сессии и подделать его нельзя: он берётся из проверенной подписи).
- * Для остальных — IP.
- *
- * NB: authMiddleware выполняется позже rate limit, поэтому req.telegramUser тут
- * ещё не заполнен — достаём id из initData сами, но БЕЗ доверия: подпись
- * проверяется дальше в auth. Для лимитера этого достаточно (подделка чужого id
- * лишь ускорит исчерпание чужого лимита, а не даст обход своего), но на всякий
- * случай мешаем IP, чтобы нельзя было расходовать лимит другого пользователя.
- */
-function rateLimitKey(req: { headers: Record<string, unknown>; ip: string }): string {
-  const auth = req.headers.authorization;
-  if (typeof auth === "string") {
-    const raw = auth.startsWith("tma ") ? auth.slice(4) : auth;
-    try {
-      const userJson = new URLSearchParams(raw).get("user");
-      if (userJson) {
-        const id = (JSON.parse(userJson) as { id?: unknown }).id;
-        if (typeof id === "number") return `tg:${id}:${req.ip}`;
-      }
-    } catch {
-      /* мусорный заголовок — падаем на IP ниже */
-    }
-  }
-  return `ip:${req.ip}`;
-}
-
 async function main() {
   await runMigrations();
 
   await app.register(cors, { origin: corsOrigins() });
 
-  // Глобальный rate limit: ключ — стабильный Telegram ID (см. rateLimitKey),
-  // для неавторизованных запросов — IP.
+  // Глобальный rate limit — ТОЛЬКО по IP.
+  //
+  // Важно: этот лимитер работает на этапе onRequest, до проверки подписи
+  // Telegram. Любые данные из заголовка тут ещё не подтверждены, поэтому
+  // строить по ним ключ нельзя: клиент прислал бы user={"id":1}, {"id":2}, …
+  // и получал бы новый счётчик на каждый запрос, полностью обходя лимит.
+  // IP — единственное, что на этом этапе подделать нельзя.
+  //
+  // Ограничения на конкретного пользователя навешиваются отдельно, ПОСЛЕ
+  // авторизации — см. perUserRateLimit (backend/src/plugins/rate-limit-user.ts).
   await app.register(rateLimit, {
-    max: 120,
+    max: 300,
     timeWindow: "1 minute",
-    keyGenerator: (req) => rateLimitKey(req as never),
+    keyGenerator: (req) => req.ip,
   });
 
   await app.register(authPlugin);

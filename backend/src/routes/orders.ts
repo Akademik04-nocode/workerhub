@@ -4,10 +4,11 @@ import { orders, responses, users, reviews, blacklist } from "../db/schema.js";
 import { eq, and, or, asc, desc, sql, count, inArray, getTableColumns } from "drizzle-orm";
 import { parsePaymentString } from "../utils/parser.js";
 import { recalcRating, overallRating } from "../utils/rating.js";
-import { notifyInBackgroundSafe } from "../utils/notify.js";
+import { notifyInBackground, notifyInBackgroundSafe } from "../utils/notify.js";
 import { eligibleWorkersForOrder } from "../utils/eligibility.js";
 import { ORDER_CATEGORIES, type OrderCategory } from "../utils/categories.js";
 import { validateShiftStart } from "../utils/shift-time.js";
+import { perUserRateLimit } from "../plugins/rate-limit-user.js";
 
 const CACHE_KEY = "open_orders_cache";
 const CACHE_TTL_SECONDS = 30;
@@ -99,10 +100,10 @@ const listOrdersSchema = {
   },
 };
 
-// Жёсткий лимит на «шумные» операции (создание/донабор рассылают уведомления всем).
-const noisyRateLimit = {
-  rateLimit: { max: 5, timeWindow: "1 minute" },
-};
+// Жёсткий лимит на «шумные» операции (создание/донабор рассылают уведомления
+// всем подходящим исполнителям). Вешается ПОСЛЕ app.auth, поэтому считает по
+// проверенному пользователю, а не по подделываемому заголовку.
+const noisyUserLimit = perUserRateLimit("noisy", 5, 60);
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -112,7 +113,7 @@ export async function orderRoutes(app: FastifyInstance) {
   // POST /api/orders — создать заказ (работодатель)
   app.post<{ Body: CreateOrderBody }>(
     "/api/orders",
-    { preHandler: [app.auth], schema: createOrderSchema, config: noisyRateLimit },
+    { preHandler: [app.auth, noisyUserLimit], schema: createOrderSchema },
     async (req, reply) => {
       const employer = req.dbUser;
       const {
@@ -182,12 +183,30 @@ export async function orderRoutes(app: FastifyInstance) {
         favFirst ? { favoritesOnly: true } : {}
       );
       const star = favFirst ? "⭐ " : "";
-      notifyInBackgroundSafe(
-        eligible.map((w) => ({
-          telegramId: w.telegramId,
-          text: `${star}🆕 ${title.trim()}: ${date} ${startTime}, ${address ?? "адрес уточняется"}, оплата ${parsed.basePay}₽`,
-        }))
-      );
+      // Ставим в очередь с обработкой сбоя: если Redis недоступен, уведомления
+      // о заказе НЕ должны пропасть навсегда. Раньше тут был "safe"-вариант,
+      // который просто логировал ошибку — и при favFirst=false заказ оставался
+      // с broadcastDone=true, то есть не разослан и повтора не будет.
+      // Теперь передаём заказ планировщику: он повторит рассылку на следующем
+      // тике. notifyFavoritesFirst сбрасываем, чтобы избранные (не получившие
+      // первую волну) тоже попали в рассылку — они лишь теряют фору.
+      try {
+        await notifyInBackground(
+          eligible.map((w) => ({
+            telegramId: w.telegramId,
+            text: `${star}🆕 ${title.trim()}: ${date} ${startTime}, ${address ?? "адрес уточняется"}, оплата ${parsed.basePay}₽`,
+          }))
+        );
+      } catch (e) {
+        req.log.error(
+          { err: e, orderId: newOrder[0].id },
+          "Очередь недоступна — рассылку заказа передаю планировщику"
+        );
+        await db
+          .update(orders)
+          .set({ broadcastDone: false, broadcastAt: new Date(), notifyFavoritesFirst: false })
+          .where(eq(orders.id, newOrder[0].id));
+      }
 
       return reply.status(201).send(newOrder[0]);
     }
@@ -725,8 +744,7 @@ export async function orderRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string }; Body: { addSlots?: number } }>(
     "/api/orders/:id/reopen",
     {
-      preHandler: [app.auth],
-      config: noisyRateLimit,
+      preHandler: [app.auth, noisyUserLimit],
       schema: {
         body: {
           type: "object",

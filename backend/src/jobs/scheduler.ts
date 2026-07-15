@@ -52,7 +52,11 @@ async function broadcastDelayedOrders() {
       order.employerId,
       Number(order.minRatingRequired),
       order.category,
-      { excludeFavorites: true }
+      // Избранных исключаем только если они действительно получили первую волну.
+      // Если создание заказа не смогло поставить её в очередь (Redis лежал), оно
+      // сбрасывает notifyFavoritesFirst=false — и тогда рассылаем всем, включая
+      // избранных, иначе они не узнали бы о заказе вообще.
+      { excludeFavorites: order.notifyFavoritesFirst }
     );
     // Порядок важен: СНАЧАЛА ставим задачи в очередь, и только потом помечаем
     // рассылку выполненной. Раньше было наоборот — если Redis в этот момент

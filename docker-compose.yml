@@ -52,7 +52,11 @@ services:
       BOT_TOKEN: ${BOT_TOKEN:?Задайте BOT_TOKEN в .env}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
-      INIT_DATA_TTL: ${INIT_DATA_TTL:-86400}
+      INIT_DATA_TTL: ${INIT_DATA_TTL:-21600}
+      # Число прокси перед backend: Cloudflare + Caddy = 2. Нужно, чтобы
+      # rate limit видел реальный IP клиента, а не адрес Caddy (общий для всех).
+      # Если отключить проксирование Cloudflare — поставьте 1.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-2}
       # Таймзона важна для планировщика: даты смен сравниваются в местном времени.
       TZ: ${TZ:-Europe/Moscow}
       PORT: 3000
