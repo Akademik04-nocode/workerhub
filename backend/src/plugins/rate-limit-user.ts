@@ -16,6 +16,29 @@ import { redis } from "../db/index.js";
  * Счётчик — в Redis (INCR + EXPIRE), поэтому переживает перезапуск backend
  * и общий для всех реплик.
  */
+/**
+ * INCR и установка TTL одной атомарной операцией.
+ *
+ * Раздельные INCR + EXPIRE опасны: если процесс упадёт (или Redis оборвёт
+ * соединение) ровно между ними, ключ останется БЕЗ времени жизни — счётчик
+ * никогда не сбросится, и пользователь окажется заблокирован навсегда.
+ * Lua-скрипт в Redis выполняется целиком и неделимо, поэтому такого окна нет.
+ *
+ * Дополнительно лечим ключи без TTL (ttl < 0), если такие остались от старой
+ * версии кода: иначе они провисят вечно.
+ */
+const INCR_WITH_TTL = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+else
+  if redis.call('TTL', KEYS[1]) < 0 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+  end
+end
+return count
+`;
+
 export function perUserRateLimit(bucket: string, max: number, windowSeconds: number) {
   return async function limiter(req: FastifyRequest, reply: FastifyReply) {
     const userId = req.dbUser?.id;
@@ -24,17 +47,17 @@ export function perUserRateLimit(bucket: string, max: number, windowSeconds: num
 
     const key = `rl:${bucket}:${userId}`;
     try {
-      const count = await redis.incr(key);
-      // EXPIRE ставим только на первом инкременте: окно фиксированное,
-      // иначе активный пользователь бесконечно продлевал бы себе счётчик.
-      if (count === 1) await redis.expire(key, windowSeconds);
+      const count = (await redis.eval(
+        INCR_WITH_TTL,
+        1,
+        key,
+        String(windowSeconds)
+      )) as number;
       if (count > max) {
         const ttl = await redis.ttl(key);
-        return reply
-          .status(429)
-          .send({
-            error: `Слишком часто. Попробуйте через ${ttl > 0 ? ttl : windowSeconds} сек.`,
-          });
+        return reply.status(429).send({
+          error: `Слишком часто. Попробуйте через ${ttl > 0 ? ttl : windowSeconds} сек.`,
+        });
       }
     } catch (e) {
       // Redis недоступен — не блокируем работу приложения: глобальный лимит по IP

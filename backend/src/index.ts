@@ -21,15 +21,17 @@ import { startNotifyWorker } from "./utils/notify.js";
  * душил бы всех разом.
  *
  * Значение = число доверенных прокси между клиентом и backend.
- * Прод: клиент → Cloudflare → Caddy → backend, то есть 2.
- * X-Forwarded-For приходит как "реальныйКлиент, IP_Cloudflare", сокет — Caddy;
- * при hops=2 Fastify отдаёт именно реального клиента.
  *
- * Важно: значение должно совпадать с реальной цепочкой. Если убрать Cloudflare
- * (серое облако) и не поправить TRUST_PROXY_HOPS на 1, клиент сможет подделать
- * свой IP через заголовок X-Forwarded-For и обойти лимит.
+ * По умолчанию 1 — это базовая установка через install.sh: клиент → Caddy →
+ * backend. Значение НЕ должно превышать реальную длину цепочки: лишний "hop"
+ * заставляет доверять заголовку X-Forwarded-For, который клиент прислал сам,
+ * и тогда IP подделывается (а с ним обходится rate limit).
+ *
+ * Если перед Caddy стоит Cloudflare (оранжевое облако) или другой прокси —
+ * поставьте TRUST_PROXY_HOPS=2 в .env, иначе все пользователи одного
+ * дата-центра Cloudflare попадут в общий счётчик лимита.
  */
-const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS ?? 2);
+const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS ?? 1);
 
 const app = Fastify({ logger: true, trustProxy: TRUST_PROXY_HOPS });
 

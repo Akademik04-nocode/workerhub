@@ -155,6 +155,10 @@ POSTGRES_DB=workerhub
 # Backend
 CORS_ORIGIN=https://${DOMAIN}
 INIT_DATA_TTL=21600
+# Число прокси перед backend. Этот установщик ставит только Caddy, поэтому 1.
+# Если поставите домен за Cloudflare (оранжевое облако) — смените на 2,
+# иначе все пользователи одного дата-центра CF попадут в общий лимит.
+TRUST_PROXY_HOPS=1
 ADMIN_TELEGRAM_IDS=${ADMIN_ID}
 TZ=Europe/Moscow
 

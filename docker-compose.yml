@@ -53,10 +53,11 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
       INIT_DATA_TTL: ${INIT_DATA_TTL:-21600}
-      # Число прокси перед backend: Cloudflare + Caddy = 2. Нужно, чтобы
-      # rate limit видел реальный IP клиента, а не адрес Caddy (общий для всех).
-      # Если отключить проксирование Cloudflare — поставьте 1.
-      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-2}
+      # Число прокси перед backend. По умолчанию 1 (клиент → Caddy → backend).
+      # Если перед Caddy стоит Cloudflare — поставьте TRUST_PROXY_HOPS=2 в .env.
+      # Значение больше реальной длины цепочки НЕБЕЗОПАСНО: клиент сможет
+      # подделать свой IP через X-Forwarded-For и обойти rate limit.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       # Таймзона важна для планировщика: даты смен сравниваются в местном времени.
       TZ: ${TZ:-Europe/Moscow}
       PORT: 3000
