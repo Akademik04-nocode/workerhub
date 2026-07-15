@@ -1,7 +1,7 @@
 import { and, eq, lt, lte, isNull, sql, count, inArray } from "drizzle-orm";
 import { db, redis } from "../db/index.js";
 import { orders, responses, users } from "../db/schema.js";
-import { notifyInBackground } from "../utils/notify.js";
+import { notifyInBackground, notifyInBackgroundSafe } from "../utils/notify.js";
 import { eligibleWorkersForOrder } from "../utils/eligibility.js";
 
 const TICK_MS = 60_000;
@@ -48,20 +48,31 @@ async function broadcastDelayedOrders() {
     .limit(50);
 
   for (const order of due) {
-    // Помечаем ДО рассылки: повторный тик не должен продублировать уведомления.
-    await db.update(orders).set({ broadcastDone: true }).where(eq(orders.id, order.id));
     const eligible = await eligibleWorkersForOrder(
       order.employerId,
       Number(order.minRatingRequired),
       order.category,
       { excludeFavorites: true }
     );
-    notifyInBackground(
-      eligible.map((w) => ({
-        telegramId: w.telegramId,
-        text: `🆕 ${order.title ?? "Новый заказ"}: ${order.date} ${order.startTime}, ${order.address ?? "адрес уточняется"}, оплата ${order.basePay}₽`,
-      }))
-    );
+    // Порядок важен: СНАЧАЛА ставим задачи в очередь, и только потом помечаем
+    // рассылку выполненной. Раньше было наоборот — если Redis в этот момент
+    // недоступен, заказ навсегда оставался с broadcastDone=true, и рассылка
+    // не уходила уже никогда. Теперь при сбое очереди пометки не будет и
+    // следующий тик повторит попытку.
+    try {
+      await notifyInBackground(
+        eligible.map((w) => ({
+          telegramId: w.telegramId,
+          text: `🆕 ${order.title ?? "Новый заказ"}: ${order.date} ${order.startTime}, ${order.address ?? "адрес уточняется"}, оплата ${order.basePay}₽`,
+        }))
+      );
+    } catch (e) {
+      console.error(`scheduler: не удалось поставить рассылку заказа ${order.id}:`, e);
+      continue; // не помечаем — повторим на следующем тике
+    }
+    // Окно дублирования тут крошечное (упасть ровно между push и update),
+    // а повтор уведомления — меньшее зло, чем молча не разослать заказ.
+    await db.update(orders).set({ broadcastDone: true }).where(eq(orders.id, order.id));
   }
 }
 
@@ -107,7 +118,9 @@ async function closeExpiredOrders() {
       .from(users)
       .where(inArray(users.id, employerIds));
     const byId = new Map(emps.map((e) => [e.id, e]));
-    notifyInBackground(
+    // Тут пометки нет (статус заказа уже изменён в БД), поэтому сбой очереди
+    // не должен ронять тик — достаточно залогировать.
+    notifyInBackgroundSafe(
       cancelled.flatMap((o) => {
         const e = byId.get(o.employerId);
         return e?.notifyEnabled
@@ -144,19 +157,27 @@ async function remindToComplete() {
 
   if (due.length === 0) return;
 
+  // Сначала ставим в очередь, потом помечаем отправленным (см. комментарий
+  // в broadcastPending): при сбое Redis пометка не встанет и следующий тик
+  // повторит попытку, а не потеряет напоминание навсегда.
+  try {
+    await notifyInBackground(
+      due
+        .filter((o) => o.notifyEnabled)
+        .map((o) => ({
+          telegramId: o.telegramId,
+          text: `📝 Смена ${o.date} прошла. Завершите заказ №${o.id.slice(0, 8)} в приложении и оцените исполнителей.`,
+        }))
+    );
+  } catch (e) {
+    console.error("scheduler: не удалось поставить напоминания о завершении:", e);
+    return;
+  }
+
   await db
     .update(orders)
     .set({ completeReminderSentAt: new Date() })
     .where(inArray(orders.id, due.map((o) => o.id)));
-
-  notifyInBackground(
-    due
-      .filter((o) => o.notifyEnabled)
-      .map((o) => ({
-        telegramId: o.telegramId,
-        text: `📝 Смена ${o.date} прошла. Завершите заказ №${o.id.slice(0, 8)} в приложении и оцените исполнителей.`,
-      }))
-  );
 }
 
 /**
@@ -198,31 +219,52 @@ async function remindToConfirm() {
 
   if (due.length === 0) return;
 
+  try {
+    await notifyInBackground(
+      due
+        .filter((r) => r.notifyEnabled)
+        .map((r) => ({
+          telegramId: r.telegramId,
+          text: `⏰ Смена сегодня в ${r.startTime} (${r.address ?? "адрес в заказе"}). Подтвердите выход в приложении.`,
+        }))
+    );
+  } catch (e) {
+    console.error("scheduler: не удалось поставить напоминания о выходе:", e);
+    return;
+  }
+
   await db
     .update(responses)
     .set({ reminderSentAt: new Date() })
     .where(inArray(responses.id, due.map((r) => r.responseId)));
-
-  notifyInBackground(
-    due
-      .filter((r) => r.notifyEnabled)
-      .map((r) => ({
-        telegramId: r.telegramId,
-        text: `⏰ Смена сегодня в ${r.startTime} (${r.address ?? "адрес в заказе"}). Подтвердите выход в приложении.`,
-      }))
-  );
 }
 
+// Флаг «тик уже выполняется». setInterval запускает следующий тик по таймеру,
+// не дожидаясь предыдущего: если один прогон затянется дольше TICK_MS (тормозит
+// БД, большая рассылка), тики начнут накладываться и обрабатывать одни и те же
+// записи параллельно — отсюда дубли уведомлений и гонки. Пропускаем тик, если
+// предыдущий ещё не закончил.
+let tickRunning = false;
+
 async function tick() {
-  // Задачи независимы: ошибка одной не должна ронять остальные.
-  const results = await Promise.allSettled([
-    broadcastDelayedOrders(),
-    closeExpiredOrders(),
-    remindToComplete(),
-    remindToConfirm(),
-  ]);
-  for (const r of results) {
-    if (r.status === "rejected") console.error("Ошибка фоновой задачи:", r.reason);
+  if (tickRunning) {
+    console.error("scheduler: предыдущий тик ещё выполняется — пропускаю");
+    return;
+  }
+  tickRunning = true;
+  try {
+    // Задачи независимы: ошибка одной не должна ронять остальные.
+    const results = await Promise.allSettled([
+      broadcastDelayedOrders(),
+      closeExpiredOrders(),
+      remindToComplete(),
+      remindToConfirm(),
+    ]);
+    for (const r of results) {
+      if (r.status === "rejected") console.error("Ошибка фоновой задачи:", r.reason);
+    }
+  } finally {
+    tickRunning = false;
   }
 }
 

@@ -4,9 +4,10 @@ import { orders, responses, users, reviews, blacklist } from "../db/schema.js";
 import { eq, and, or, asc, desc, sql, count, inArray, getTableColumns } from "drizzle-orm";
 import { parsePaymentString } from "../utils/parser.js";
 import { recalcRating, overallRating } from "../utils/rating.js";
-import { notifyInBackground } from "../utils/notify.js";
+import { notifyInBackgroundSafe } from "../utils/notify.js";
 import { eligibleWorkersForOrder } from "../utils/eligibility.js";
 import { ORDER_CATEGORIES, type OrderCategory } from "../utils/categories.js";
+import { validateShiftStart } from "../utils/shift-time.js";
 
 const CACHE_KEY = "open_orders_cache";
 const CACHE_TTL_SECONDS = 30;
@@ -72,8 +73,11 @@ const createOrderSchema = {
       title: { type: "string", minLength: 3, maxLength: 80 },
       category: { type: "string", enum: [...ORDER_CATEGORIES] },
       notifyFavoritesFirst: { type: "boolean" },
-      date: { type: "string" },
-      startTime: { type: "string" },
+      // Формат проверяем строго: раньше тут был просто "string", и API принимал
+      // "2026-99-77" или "25:90". Регулярка отсекает мусор по форме, а
+      // validateShiftStart ниже — семантику (реальная дата, не в прошлом).
+      date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+      startTime: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
       address: { type: "string" },
       description: { type: "string" },
       minRating: { type: "number", minimum: 0, maximum: 5 },
@@ -133,6 +137,11 @@ export async function orderRoutes(app: FastifyInstance) {
       const parsed = parsePaymentString(paymentString);
       if (!parsed) return reply.status(400).send({ error: "Неверный формат оплаты" });
 
+      // Схема проверила только форму строк — здесь проверяем, что дата реальная
+      // и смена не в прошлом.
+      const shift = validateShiftStart(date, startTime);
+      if (!shift.ok) return reply.status(400).send({ error: shift.error });
+
       const minRatingNum = isFiniteNumber(minRating) ? minRating : 0;
       const favFirst = notifyFavoritesFirst === true;
       // Категория осталась в БД для совместимости; в интерфейсе теперь свободное название.
@@ -173,7 +182,7 @@ export async function orderRoutes(app: FastifyInstance) {
         favFirst ? { favoritesOnly: true } : {}
       );
       const star = favFirst ? "⭐ " : "";
-      notifyInBackground(
+      notifyInBackgroundSafe(
         eligible.map((w) => ({
           telegramId: w.telegramId,
           text: `${star}🆕 ${title.trim()}: ${date} ${startTime}, ${address ?? "адрес уточняется"}, оплата ${parsed.basePay}₽`,
@@ -413,7 +422,7 @@ export async function orderRoutes(app: FastifyInstance) {
           .where(eq(users.id, order.employerId))
           .limit(1);
         if (empRows[0]?.notifyEnabled) {
-          notifyInBackground([
+          notifyInBackgroundSafe([
             {
               telegramId: empRows[0].telegramId,
               text: `👍 ${me.name ?? "Исполнитель"} подтвердил выход на смену ${order.date} ${order.startTime}.`,
@@ -500,7 +509,7 @@ export async function orderRoutes(app: FastifyInstance) {
         .limit(1);
       const employer = employerRows[0];
       if (employer?.notifyEnabled) {
-        notifyInBackground([
+        notifyInBackgroundSafe([
           { telegramId: employer.telegramId, text: `📬 Новый отклик на ваш заказ №${id.slice(0, 8)}` },
         ]);
       }
@@ -633,7 +642,7 @@ export async function orderRoutes(app: FastifyInstance) {
         .limit(1);
       const worker = workerRows[0];
       if (worker?.notifyEnabled) {
-        notifyInBackground([{ telegramId: worker.telegramId, text: "✅ Вас выбрали для заказа" }]);
+        notifyInBackgroundSafe([{ telegramId: worker.telegramId, text: "✅ Вас выбрали для заказа" }]);
       }
 
       if (filled) await invalidateOrdersCache();
@@ -695,7 +704,7 @@ export async function orderRoutes(app: FastifyInstance) {
           .select({ telegramId: users.telegramId, notifyEnabled: users.notifyEnabled })
           .from(users)
           .where(inArray(users.id, ids));
-        notifyInBackground(
+        notifyInBackgroundSafe(
           workers
             .filter((w) => w.notifyEnabled)
             .map((w) => ({
@@ -787,7 +796,7 @@ export async function orderRoutes(app: FastifyInstance) {
           title: string | null;
         };
         const eligible = await eligibleWorkersForOrder(me.id, Number(info.minRatingRequired), info.category);
-        notifyInBackground(
+        notifyInBackgroundSafe(
           eligible.map((w) => ({
             telegramId: w.telegramId,
             text: `🔁 Донабор: ${info.title ?? "заказ"} — ${info.date} ${info.startTime}, оплата ${info.basePay}₽`,
@@ -922,7 +931,7 @@ export async function orderRoutes(app: FastifyInstance) {
         .limit(1);
       const worker = workerRows[0];
       if (worker?.notifyEnabled) {
-        notifyInBackground([
+        notifyInBackgroundSafe([
           {
             telegramId: worker.telegramId,
             text: noShow

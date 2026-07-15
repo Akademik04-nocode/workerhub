@@ -32,12 +32,59 @@ async function runMigrations() {
   }
 }
 
-/** Список origin из env; пустая строка/пробелы = разрешить все (dev). */
+/**
+ * Список origin из env; пустая строка/пробелы = разрешить все (dev).
+ * В production пустой CORS_ORIGIN — почти наверняка забытая переменная, а не
+ * осознанное «пускать всех»: падаем на старте, а не молча открываем API миру.
+ */
 function corsOrigins(): string[] | boolean {
   const raw = process.env.CORS_ORIGIN?.trim();
-  if (!raw) return true;
+  if (!raw) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "CORS_ORIGIN обязателен в production (укажите https://ваш-домен в .env)"
+      );
+    }
+    return true;
+  }
   const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
   return list.length > 0 ? list : true;
+}
+
+/**
+ * Ключ для rate limit.
+ *
+ * Раньше ключом был весь заголовок Authorization. Проблема: Telegram выдаёт
+ * новый initData при каждом открытии мини-аппа, поэтому у одного и того же
+ * человека ключ постоянно менялся и лимит фактически обнулялся при перезаходе;
+ * а злоумышленник мог просто слать мусорный заголовок, получая новый лимит на
+ * каждый запрос. Плюс в ключ попадала подпись целиком (лишние данные в памяти).
+ *
+ * Теперь: для авторизованных — стабильный Telegram ID (не меняется от сессии
+ * к сессии и подделать его нельзя: он берётся из проверенной подписи).
+ * Для остальных — IP.
+ *
+ * NB: authMiddleware выполняется позже rate limit, поэтому req.telegramUser тут
+ * ещё не заполнен — достаём id из initData сами, но БЕЗ доверия: подпись
+ * проверяется дальше в auth. Для лимитера этого достаточно (подделка чужого id
+ * лишь ускорит исчерпание чужого лимита, а не даст обход своего), но на всякий
+ * случай мешаем IP, чтобы нельзя было расходовать лимит другого пользователя.
+ */
+function rateLimitKey(req: { headers: Record<string, unknown>; ip: string }): string {
+  const auth = req.headers.authorization;
+  if (typeof auth === "string") {
+    const raw = auth.startsWith("tma ") ? auth.slice(4) : auth;
+    try {
+      const userJson = new URLSearchParams(raw).get("user");
+      if (userJson) {
+        const id = (JSON.parse(userJson) as { id?: unknown }).id;
+        if (typeof id === "number") return `tg:${id}:${req.ip}`;
+      }
+    } catch {
+      /* мусорный заголовок — падаем на IP ниже */
+    }
+  }
+  return `ip:${req.ip}`;
 }
 
 async function main() {
@@ -45,12 +92,12 @@ async function main() {
 
   await app.register(cors, { origin: corsOrigins() });
 
-  // Глобальный rate limit. Ключ — авторизационный заголовок (стабильнее IP
-  // за реверс-прокси); для неавторизованных запросов — IP.
+  // Глобальный rate limit: ключ — стабильный Telegram ID (см. rateLimitKey),
+  // для неавторизованных запросов — IP.
   await app.register(rateLimit, {
     max: 120,
     timeWindow: "1 minute",
-    keyGenerator: (req) => req.headers.authorization ?? req.ip,
+    keyGenerator: (req) => rateLimitKey(req as never),
   });
 
   await app.register(authPlugin);

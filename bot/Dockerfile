@@ -11,4 +11,6 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
+# Не работаем от root (см. backend/Dockerfile).
+USER node
 CMD ["node", "dist/index.js"]

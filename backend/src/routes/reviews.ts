@@ -3,6 +3,7 @@ import { db } from "../db/index.js";
 import { reviews, orders, responses } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { recalcRating, overallRating } from "../utils/rating.js";
+import { isUniqueViolation } from "../utils/db-errors.js";
 
 interface CreateReviewBody {
   orderId: string;
@@ -95,10 +96,17 @@ export async function reviewRoutes(app: FastifyInstance) {
           // Пересчитываем агрегированный рейтинг получателя «с нуля».
           await recalcRating(tx, targetId);
         });
-      } catch {
-        return reply
-          .status(409)
-          .send({ error: "Вы уже оставили отзыв по этому заказу" });
+      } catch (e) {
+        // 409 — только настоящий повторный отзыв (конфликт уникального индекса).
+        if (isUniqueViolation(e, "reviews_order_reviewer_target_idx")) {
+          return reply
+            .status(409)
+            .send({ error: "Вы уже оставили отзыв по этому заказу" });
+        }
+        // Всё остальное (падение БД, ошибка пересчёта рейтинга) — настоящая
+        // авария: логируем и честно отдаём 500, а не врём про «уже оставили».
+        req.log.error({ err: e, orderId, targetId }, "Не удалось сохранить отзыв");
+        return reply.status(500).send({ error: "Не удалось сохранить отзыв" });
       }
 
       return reply.status(201).send({ success: true });

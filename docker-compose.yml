@@ -22,6 +22,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # appendonly + volume: в Redis лежит очередь уведомлений, а не только кэш.
+    # Без персистентности пересоздание контейнера или падение сервера стирало бы
+    # ещё не отправленные уведомления.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     # Redis без пароля не должен быть доступен снаружи ни при каких условиях.
     # Для отладки: раскомментируйте привязку к localhost.
     # ports:
@@ -34,7 +45,7 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-workerhub}
       REDIS_URL: redis://redis:6379
@@ -46,6 +57,12 @@ services:
       TZ: ${TZ:-Europe/Moscow}
       PORT: 3000
     # Порт наружу не публикуем: запросы идут через Caddy по HTTPS.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   bot:
     build: ./bot
@@ -65,7 +82,11 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        # Пусто по умолчанию = относительные запросы (/api/...) на тот же домен,
+        # который и так проксирует Caddy. Прежний дефолт http://localhost:3000
+        # в браузере пользователя означал ЕГО устройство, а не сервер, — при
+        # забытой переменной фронт молча переставал видеть backend.
+        VITE_API_URL: ${VITE_API_URL:-}
     restart: unless-stopped
     depends_on:
       - backend
@@ -89,5 +110,6 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
   caddy_data:
   caddy_config:

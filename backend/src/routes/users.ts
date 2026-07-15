@@ -38,9 +38,11 @@ export async function userRoutes(app: FastifyInstance) {
       const patch: { role?: "admin"; username?: string | null; photoUrl?: string | null } = {};
       // Бутстрап-админ всегда получает роль admin при входе.
       if (isAdmin && existing.role !== "admin") patch.role = "admin";
-      // Держим username и аватар в актуальном состоянии.
+      // Держим username и аватар в актуальном состоянии. Пишем и null:
+      // если пользователь удалил аватар в Telegram, старый URL должен исчезнуть
+      // (иначе в профиле вечно висела бы уже несуществующая картинка).
       if (existing.username !== tgUsername) patch.username = tgUsername;
-      if (existing.photoUrl !== tgPhoto && tgPhoto !== null) patch.photoUrl = tgPhoto;
+      if (existing.photoUrl !== tgPhoto) patch.photoUrl = tgPhoto;
 
       if (Object.keys(patch).length > 0) {
         const updated = await db

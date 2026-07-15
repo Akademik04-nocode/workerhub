@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+// Пусто = относительные запросы (/api/...) на тот же домен: их проксирует Caddy.
+// Абсолютный localhost-дефолт тут опасен — в браузере пользователя это его
+// собственное устройство, а не сервер WorkerHub.
+const BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export async function apiFetch<T = unknown>(
   path: string,

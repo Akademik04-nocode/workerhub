@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import { blacklist, users } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { isUniqueViolation } from "../utils/db-errors.js";
 
 interface BlacklistBody {
   blockedUserId: string;
@@ -46,8 +47,12 @@ export async function blacklistRoutes(app: FastifyInstance) {
         await db
           .insert(blacklist)
           .values({ userId: me.id, blockedUserId: req.body.blockedUserId });
-      } catch {
-        return reply.status(409).send({ error: "Уже в чёрном списке" });
+      } catch (e) {
+        if (isUniqueViolation(e, "blacklist_user_blocked_idx")) {
+          return reply.status(409).send({ error: "Уже в чёрном списке" });
+        }
+        req.log.error({ err: e }, "Не удалось добавить в чёрный список");
+        return reply.status(500).send({ error: "Не удалось добавить в чёрный список" });
       }
       return reply.status(201).send({ success: true });
     }

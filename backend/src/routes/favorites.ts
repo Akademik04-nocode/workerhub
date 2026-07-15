@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import { favorites, users } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
+import { isUniqueViolation } from "../utils/db-errors.js";
 
 interface FavoriteBody {
   targetUserId: string;
@@ -46,8 +47,12 @@ export async function favoriteRoutes(app: FastifyInstance) {
         await db
           .insert(favorites)
           .values({ userId: me.id, targetUserId: req.body.targetUserId });
-      } catch {
-        return reply.status(409).send({ error: "Уже в избранном" });
+      } catch (e) {
+        if (isUniqueViolation(e, "favorites_user_target_idx")) {
+          return reply.status(409).send({ error: "Уже в избранном" });
+        }
+        req.log.error({ err: e }, "Не удалось добавить в избранное");
+        return reply.status(500).send({ error: "Не удалось добавить в избранное" });
       }
       return reply.status(201).send({ success: true });
     }

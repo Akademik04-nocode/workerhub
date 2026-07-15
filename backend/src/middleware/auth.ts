@@ -11,7 +11,11 @@ if (!BOT_TOKEN) {
 }
 
 // Максимальный возраст initData в секундах (защита от replay-атак).
-const MAX_AUTH_AGE_SECONDS = Number(process.env.INIT_DATA_TTL ?? 86_400); // 24 часа
+// 6 часов вместо суток: столько же живёт открытая вкладка мини-аппа, но окно
+// для повторного использования украденного initData втрое меньше. Значение
+// настраивается через INIT_DATA_TTL — если пользователи начнут ловить 401
+// при долгих сессиях, поднимите.
+const MAX_AUTH_AGE_SECONDS = Number(process.env.INIT_DATA_TTL ?? 21_600); // 6 часов
 
 type ValidationResult =
   | { valid: true; user: TelegramUser }
